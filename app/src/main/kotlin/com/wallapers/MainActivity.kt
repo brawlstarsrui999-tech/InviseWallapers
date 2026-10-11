@@ -103,29 +103,49 @@ class MainActivity : Activity() {
             setPadding(dp(20), dp(10), dp(20), dp(28))
         }
 
-        addBlock(content, smallLabel("КОЛЛЕКЦИЯ  /  04"), bottom = 10)
-        val heading = bodyText("Обои с\nнастроением", 32f, COLOR_TEXT, bold = true).apply {
+        val inManagedProfile = isManagedProfile()
+        addBlock(content, smallLabel(if (inManagedProfile) "РАБОЧЕЕ ПРОСТРАНСТВО" else "КОЛЛЕКЦИЯ  /  04"), bottom = 10)
+        val heading = bodyText(
+            if (inManagedProfile) "Твои копии\nв Wallapers" else "Обои с\nнастроением",
+            32f,
+            COLOR_TEXT,
+            bold = true
+        ).apply {
             setLineSpacing(dp(-2).toFloat(), 1f)
         }
         addBlock(content, heading, bottom = 8)
         addBlock(
             content,
-            bodyText("Спокойные оттенки, мягкие формы и немного настроения для твоего экрана.", 14f, COLOR_MUTED),
+            bodyText(
+                if (inManagedProfile) {
+                    "Отдельные экземпляры приложений в рабочем профиле Android."
+                } else {
+                    "Спокойные оттенки, мягкие формы и немного настроения для твоего экрана."
+                },
+                14f,
+                COLOR_MUTED
+            ),
             bottom = 20
         )
 
         when {
-            isManagedProfile() -> {
+            inManagedProfile -> {
                 addBlock(content, managedProfileCard(), bottom = 12)
-                addBlock(
-                    content,
-                    infoCard(
-                        "↔",
-                        "Выбери приложение в личном профиле",
-                        "Вернись к Wallapers без значка портфеля, найди приложение в списке и нажми «Клонировать». В рабочий профиль будет передано только имя пакета."
-                    ),
-                    bottom = 18
-                )
+                addBlock(content, smallLabel("МОИ ПРИЛОЖЕНИЯ"), bottom = 10)
+                val workspaceApps = installedLaunchableApps()
+                if (workspaceApps.isEmpty()) {
+                    addBlock(
+                        content,
+                        infoCard(
+                            "＋",
+                            "Здесь пока пусто",
+                            "Открой Wallapers без значка портфеля, выбери установленное приложение и нажми «Клонировать»."
+                        ),
+                        bottom = 18
+                    )
+                } else {
+                    workspaceApps.forEach { app -> addBlock(content, workspaceAppCard(app), bottom = 8) }
+                }
             }
             hasManagedProfile() -> {
                 addBlock(content, managedProfileCard(), bottom = 16)
@@ -192,7 +212,7 @@ class MainActivity : Activity() {
             }
         }
         addBlock(content, rulesLink, top = 2)
-        addBlock(content, bodyText("Копии видимы в Android и отмечены значком профиля.", 12f, COLOR_DIM).apply { gravity = Gravity.CENTER }, top = 0)
+        addBlock(content, bodyText("Копии установлены в отдельный профиль, а не в личный список приложений.", 12f, COLOR_DIM).apply { gravity = Gravity.CENTER }, top = 0)
 
         display(homeHeader(), content)
     }
@@ -344,7 +364,12 @@ class MainActivity : Activity() {
             setPadding(dp(11), 0, 0, 0)
         }
         titleColumn.addView(bodyText("Wallapers", 17f, COLOR_TEXT, bold = true))
-        titleColumn.addView(smallLabel("WALLPAPER & PROFILE").apply { textSize = 8f; letterSpacing = 0.08f })
+        titleColumn.addView(
+            smallLabel(if (isManagedProfile()) "APP WORKSPACE" else "WALLPAPER & PROFILE").apply {
+                textSize = 8f
+                letterSpacing = 0.08f
+            }
+        )
         row.addView(titleColumn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         val settings = iconButton("⚙︎", "Настройки") { showSettings() }
@@ -446,6 +471,31 @@ class MainActivity : Activity() {
         row.addView(
             secondaryButton("Клонировать") { requestCloneInWorkProfile(target) },
             LinearLayout.LayoutParams(dp(112), ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(8) }
+        )
+        return row
+    }
+
+    private fun workspaceAppCard(target: CloneTarget): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(12), dp(12), dp(12))
+            background = rounded(color(COLOR_SURFACE), 18)
+        }
+        val copy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        copy.addView(bodyText(target.name, 14f, COLOR_TEXT, bold = true))
+        copy.addView(bodyText("Копия · отдельные данные", 11f, COLOR_MUTED, topPadding = 4))
+        row.addView(copy, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(
+            secondaryButton("Открыть") {
+                val launchIntent = packageManager.getLaunchIntentForPackage(target.packageName)
+                if (launchIntent != null) {
+                    startActivity(launchIntent)
+                } else {
+                    Toast.makeText(this, "Не удалось открыть ${target.name}", Toast.LENGTH_SHORT).show()
+                }
+            },
+            LinearLayout.LayoutParams(dp(100), ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(8) }
         )
         return row
     }
