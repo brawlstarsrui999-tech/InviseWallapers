@@ -3,7 +3,9 @@ package com.wallapers
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.WallpaperManager
+import android.app.admin.DevicePolicyManager
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.res.ColorStateList
 import android.content.Context
 import android.content.Intent
@@ -21,6 +23,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.os.Bundle
+import android.os.UserManager
 import android.provider.Settings
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
@@ -38,9 +41,26 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private enum class Screen { HOME, SETTINGS, RULES }
 
+    private data class CloneTarget(val name: String, val packageName: String)
+
     private var currentScreen = Screen.HOME
     private var rulesReturnScreen = Screen.HOME
     private var selectedWallpaper = 0
+
+    private val socialApps = listOf(
+        CloneTarget("Telegram", "org.telegram.messenger"),
+        CloneTarget("Telegram X", "org.thunderdog.challegram"),
+        CloneTarget("WhatsApp", "com.whatsapp"),
+        CloneTarget("WhatsApp Business", "com.whatsapp.w4b"),
+        CloneTarget("Instagram", "com.instagram.android"),
+        CloneTarget("Facebook", "com.facebook.katana"),
+        CloneTarget("X", "com.twitter.android"),
+        CloneTarget("Snapchat", "com.snapchat.android"),
+        CloneTarget("Signal", "org.thoughtcrime.securesms"),
+        CloneTarget("Discord", "com.discord"),
+        CloneTarget("TikTok", "com.zhiliaoapp.musically"),
+        CloneTarget("VK", "com.vkontakte.android")
+    )
 
     private val preferences by lazy(LazyThreadSafetyMode.NONE) {
         getSharedPreferences("wallapers_preferences", MODE_PRIVATE)
@@ -95,6 +115,16 @@ class MainActivity : Activity() {
             bottom = 20
         )
 
+        if (isManagedProfile()) {
+            addBlock(content, managedProfileCard(), bottom = 14)
+            addBlock(content, smallLabel("ВТОРОЙ ЭКЗЕМПЛЯР"), bottom = 10)
+            socialApps.forEach { target ->
+                addBlock(content, cloneTargetCard(target), bottom = 8)
+            }
+        } else {
+            addBlock(content, profileSetupCard(), bottom = 20)
+        }
+
         content.addView(
             createHeroCard(),
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(270)).apply { bottomMargin = dp(14) }
@@ -123,8 +153,8 @@ class MainActivity : Activity() {
                 content,
                 infoCard(
                     "✦",
-                    "Без лишнего доступа",
-                    "Wallapers оформляет экран и не запрашивает список установленных приложений."
+                    "Только выбранные приложения",
+                    "Wallapers проверяет поддержку приложений из списка, а не сканирует весь список установок."
                 ),
                 top = 20,
                 bottom = 18
@@ -143,7 +173,7 @@ class MainActivity : Activity() {
             }
         }
         addBlock(content, rulesLink, top = 2)
-        addBlock(content, bodyText("Только обои. Без скрытых функций.", 12f, COLOR_DIM).apply { gravity = Gravity.CENTER }, top = 0)
+        addBlock(content, bodyText("Копии видимы в Android и отмечены значком профиля.", 12f, COLOR_DIM).apply { gravity = Gravity.CENTER }, top = 0)
 
         display(homeHeader(), content)
     }
@@ -190,7 +220,7 @@ class MainActivity : Activity() {
             infoCard(
                 "W",
                 "Wallapers  ·  версия 1.0",
-                "Локальная коллекция абстрактных обоев. Выбор и настройки сохраняются на этом устройстве."
+                "Обои и настройка отдельного рабочего профиля Android. Копии приложений устанавливаются только по твоему запросу."
             ),
             bottom = 18
         )
@@ -201,7 +231,7 @@ class MainActivity : Activity() {
         )
         addBlock(
             content,
-            bodyText("Приложение не клонирует и не скрывает другие приложения.", 12f, COLOR_DIM),
+            bodyText("Скрытия нет: Android показывает копии отдельным профилем с отметкой портфеля.", 12f, COLOR_DIM),
             top = 6
         )
 
@@ -216,14 +246,14 @@ class MainActivity : Activity() {
         }
 
         addBlock(content, smallLabel("ПРОЗРАЧНОСТЬ"), bottom = 10)
-        val heading = bodyText("Только обои.\nНикаких скрытых функций.", 28f, COLOR_TEXT, bold = true).apply {
+        val heading = bodyText("Отдельные аккаунты.\nПод контролем Android.", 28f, COLOR_TEXT, bold = true).apply {
             setLineSpacing(dp(-1).toFloat(), 1f)
         }
         addBlock(content, heading, bottom = 12)
         addBlock(
             content,
             bodyText(
-                "Wallapers создан для оформления экрана. Приложение не клонирует, не скрывает и не запускает сторонние приложения.",
+                "По запросу приложение помогает создать управляемый рабочий профиль Android и установить в него отдельные экземпляры поддерживаемых приложений. Настройку подтверждает система; скрывать приложения Wallapers не пытается.",
                 14f,
                 COLOR_MUTED
             ),
@@ -235,15 +265,15 @@ class MainActivity : Activity() {
             infoCard(
                 "✓",
                 "Ваши данные остаются у вас",
-                "Приложение не запрашивает список установленных приложений и не требует аккаунта. Выбранная тема и настройки хранятся локально на устройстве."
+                "Wallapers проверяет только перечисленные в каталоге социальные приложения; полного сканирования установок нет. Данные копий изолирует Android в рабочем профиле. Приложение не читает переписки и пароли."
             ),
             bottom = 20
         )
 
         addBlock(content, smallLabel("КАК ПОЛЬЗОВАТЬСЯ"), bottom = 10)
-        addBlock(content, numberedRule("01", "Выберите обои", "Нажмите на карточку с понравившимся оформлением."), bottom = 8)
-        addBlock(content, numberedRule("02", "Примените", "Кнопка установки задаёт изображение для главного экрана."), bottom = 8)
-        addBlock(content, numberedRule("03", "Управляйте приватностью в Android", "Для списка приложений и настроек доступа используйте системные функции устройства."), bottom = 20)
+        addBlock(content, numberedRule("01", "Создайте рабочий профиль", "Нажмите «Настроить профиль Android» и подтвердите системный мастер."), bottom = 8)
+        addBlock(content, numberedRule("02", "Откройте Wallapers с портфелем", "В рабочем профиле выберите нужное приложение. Его оригинал должен быть установлен на телефоне."), bottom = 8)
+        addBlock(content, numberedRule("03", "Войдите во второй аккаунт", "Android хранит данные копии отдельно и показывает её в системном списке приложений."), bottom = 20)
 
         addBlock(content, smallLabel("СИСТЕМНЫЕ НАСТРОЙКИ ANDROID"), bottom = 10)
         addBlock(
@@ -295,7 +325,7 @@ class MainActivity : Activity() {
             setPadding(dp(11), 0, 0, 0)
         }
         titleColumn.addView(bodyText("Wallapers", 17f, COLOR_TEXT, bold = true))
-        titleColumn.addView(smallLabel("WALLPAPER STUDIO").apply { textSize = 8f; letterSpacing = 0.12f })
+        titleColumn.addView(smallLabel("WALLPAPER & PROFILE").apply { textSize = 8f; letterSpacing = 0.08f })
         row.addView(titleColumn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         val settings = iconButton("⚙︎", "Настройки") { showSettings() }
@@ -345,6 +375,149 @@ class MainActivity : Activity() {
             insets
         }
         setContentView(root)
+    }
+
+    private fun profileSetupCard(): View {
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            background = rounded(color(COLOR_SURFACE), 20)
+        }
+        panel.addView(smallLabel("ОТДЕЛЬНЫЙ ПРОФИЛЬ ANDROID"))
+        panel.addView(bodyText("Второй вход — отдельно от первого", 17f, COLOR_TEXT, bold = true).apply {
+            setPadding(0, dp(8), 0, 0)
+        })
+        panel.addView(bodyText(
+            "Android может установить вторые экземпляры приложений в рабочий профиль с отдельными данными и аккаунтами. Настройка выполняется системой и требует твоего подтверждения.",
+            12f,
+            COLOR_MUTED,
+            topPadding = 7
+        ))
+        panel.addView(primaryButton("Настроить профиль Android") { requestManagedProfile() }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(14) })
+        panel.addView(bodyText(
+            "Копии будут отмечены значком портфеля и останутся видимыми в Android.",
+            11f,
+            COLOR_DIM,
+            topPadding = 9
+        ))
+        return panel
+    }
+
+    private fun managedProfileCard(): View = infoCard(
+        "▣",
+        "Рабочий профиль активен",
+        "Копии работают с отдельными данными и аккаунтами. Android помечает их значком портфеля; профиль можно приостановить в системных настройках."
+    )
+
+    private fun cloneTargetCard(target: CloneTarget): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(12), dp(12), dp(12))
+            background = rounded(color(COLOR_SURFACE), 18)
+        }
+        val copy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        copy.addView(bodyText(target.name, 14f, COLOR_TEXT, bold = true))
+        copy.addView(bodyText("Отдельная копия в рабочем профиле", 11f, COLOR_MUTED, topPadding = 4))
+        row.addView(copy, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        val actionLabel = if (hasLaunchableCopy(target.packageName)) "Открыть" else "Добавить"
+        row.addView(
+            secondaryButton(actionLabel) { handleCloneTarget(target) },
+            LinearLayout.LayoutParams(dp(100), ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(8) }
+        )
+        return row
+    }
+
+    private fun handleCloneTarget(target: CloneTarget) {
+        val existingCopy = packageManager.getLaunchIntentForPackage(target.packageName)
+        if (existingCopy != null) {
+            startActivity(existingCopy)
+            return
+        }
+
+        AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+            .setTitle("Добавить копию ${target.name}?")
+            .setMessage("Android установит приложение в отдельный рабочий профиль. Данные и вход в аккаунт будут отдельными. Копия останется видимой в лаунчере и настройках Android.")
+            .setNegativeButton("Отмена", null)
+            .setPositiveButton("Добавить") { _, _ -> installCloneIntoProfile(target) }
+            .show()
+    }
+
+    private fun installCloneIntoProfile(target: CloneTarget) {
+        if (!isManagedProfile()) {
+            Toast.makeText(this, "Открой Wallapers из рабочего профиля Android и повтори действие.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val admin = ComponentName(this, WallapersDeviceAdminReceiver::class.java)
+        val policyManager = getSystemService(DevicePolicyManager::class.java)
+        if (!policyManager.isProfileOwnerApp(packageName)) {
+            Toast.makeText(this, "Android не подтвердил управление рабочим профилем.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        try {
+            val installed = policyManager.installExistingPackage(admin, target.packageName)
+            val launchIntent = packageManager.getLaunchIntentForPackage(target.packageName)
+            when {
+                launchIntent != null -> {
+                    Toast.makeText(this, "Копия ${target.name} готова", Toast.LENGTH_SHORT).show()
+                    startActivity(launchIntent)
+                }
+                installed -> Toast.makeText(this, "Копия добавлена. Найди её в списке приложений рабочего профиля.", Toast.LENGTH_LONG).show()
+                else -> Toast.makeText(this, "Не найден установленный экземпляр ${target.name}. Сначала установи его в основном профиле.", Toast.LENGTH_LONG).show()
+            }
+        } catch (_: Exception) {
+            Toast.makeText(this, "Не удалось добавить копию. Установи приложение в основном профиле и проверь, что рабочий профиль включён.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun hasLaunchableCopy(packageName: String): Boolean =
+        packageManager.getLaunchIntentForPackage(packageName) != null
+
+    private fun isManagedProfile(): Boolean =
+        getSystemService(UserManager::class.java).isManagedProfile
+
+    @Suppress("DEPRECATION")
+    private fun requestManagedProfile() {
+        val action = DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE
+        val policyManager = getSystemService(DevicePolicyManager::class.java)
+        if (!policyManager.isProvisioningAllowed(action)) {
+            AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
+                .setTitle("Профиль недоступен")
+                .setMessage("Этот телефон или его администратор не разрешает создать рабочий профиль. Проверь системные функции приватности Android или настройки производителя.")
+                .setPositiveButton("Понятно", null)
+                .show()
+            return
+        }
+
+        val admin = ComponentName(this, WallapersDeviceAdminReceiver::class.java)
+        val intent = Intent(action).putExtra(
+            DevicePolicyManager.EXTRA_PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME,
+            admin
+        )
+        try {
+            startActivityForResult(intent, REQUEST_MANAGED_PROFILE)
+        } catch (_: Exception) {
+            Toast.makeText(this, "Не удалось открыть системную настройку профиля.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_MANAGED_PROFILE) {
+            val message = if (resultCode == RESULT_OK) {
+                "Рабочий профиль создан. Открой Wallapers с иконкой портфеля, чтобы добавить копии."
+            } else {
+                "Создание профиля отменено."
+            }
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun createHeroCard(): FrameLayout {
@@ -696,6 +869,7 @@ class MainActivity : Activity() {
         const val KEY_FAVORITES = "favorite_wallpapers"
         const val KEY_HAPTICS = "haptics_enabled"
         const val KEY_SHOW_TIPS = "show_home_tips"
+        const val REQUEST_MANAGED_PROFILE = 4102
     }
 }
 

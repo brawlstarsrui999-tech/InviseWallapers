@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Wallapers</string>
+    <string name="profile_admin_description">Создаёт отдельный управляемый профиль Android для установки приложений с раздельными данными. Профиль остаётся видимым в системе.</string>
 </resources>
